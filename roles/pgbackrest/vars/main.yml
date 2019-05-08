@@ -1,0 +1,6 @@
+pgbackrest_required_vars:
+  - pg_data_path
+  - pg_backup_dir
+  - repo_retention_full
+  - archive_compress
+  - stanza

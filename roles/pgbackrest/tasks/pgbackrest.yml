@@ -1,0 +1,97 @@
+---
+
+- name: Check required variables
+  fail: 
+    msg: "Mandatory variable {{item}} not defined. Play for pgbackrest skiped"
+  when: item not in vars
+  with_items: "{{pgbackrest_required_vars}}"
+
+- name:
+  yum:
+    name:
+        - perl-DBD-Pg
+        - perl-Digest-SHA
+        - perl-IO-Socket-SSL
+        - perl-JSON-PP
+        - perl-XML-LibXML
+        - nfs-utils
+        - curl
+        - http://download.postgresql.org/pub/repos/yum/10/redhat/rhel-7-x86_64/pgbackrest-2.10-1.rhel7.x86_64.rpm
+        - http://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/o/oniguruma-5.9.5-3.el7.x86_64.rpm
+        - http://download-ib01.fedoraproject.org/pub/epel/7/x86_64/Packages/j/jq-1.5-1.el7.x86_64.rpm
+        - zabbix-sender
+    state: present
+
+- name: copy conf files
+  template:
+      src: templates/pgbackrest.j2
+      dest: /etc/pgbackrest.conf
+      owner: postgres
+      group: postgres
+      mode: 0655
+
+- name: copy check scripts
+  copy:
+      src: files/scripts/pgback_check.sh
+      dest: /opt/pgback_check.sh
+      mode: 0755
+      owner: postgres
+      group: postgres
+- name: copy zabbix agent checks
+  copy:
+       src: files/zabbix/zabbix_userparameter_pgbackrest.conf
+       dest: /etc/zabbix/zabbix_agentd.d/userparameter_pgbackrest.conf
+       owner: zabbix
+       group: zabbix
+       mode: 0440
+  notify: zabbix_agent
+
+- name: create backup dir
+  file:
+      state: directory
+      path: '{{pg_backup_dir | mandatory}}'
+      owner: postgres
+      group: postgres
+      mode: 0755
+   
+- name: mount nfs
+  mount:
+       fstype: nfs
+       opts: defaults,_netdev,vers=3
+       path: '{{pg_backup_dir | mandatory}}'
+       src: '{{nfs_addr | mandatory}}'
+       state: mounted
+  when: nfs_addr is defined
+
+- name: create pgrestback stanza
+  become: yes
+  become_user: postgres
+  command: /usr/bin/pgbackrest --stanza={{stanza}} --log-level-console=info stanza-create
+
+- name: remove existing cron for backup
+  cron:
+       cron_file: pgbackrest
+       state: absent
+
+- name: add cron for backup
+  cron:
+       hour: '*/12' 
+       minute: '0'
+       cron_file: pgbackrest
+       job: "/bin/bash /opt/pgback_check.sh {{stanza | mandatory}} && /usr/bin/pgbackrest --stanza={{stanza | mandatory}} --log-level-console=detail --type=full backup"
+       user: postgres
+       state: present
+  tags: cron
+   
+- name: add zabbix to group postgres
+  user:
+    name: zabbix
+    append: yes
+    groups: postgres
+    
+
+
+
+
+
+

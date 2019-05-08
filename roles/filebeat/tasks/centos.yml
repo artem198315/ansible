@@ -1,0 +1,32 @@
+  - name: uninstall previous version of filebeat
+    yum: state=absent name=filebeat  
+
+  - name: install filebeat packages
+    yum: state=present name=filebeat
+
+  - name: template upload
+    template:
+      src: filebeat.j2
+      dest: /etc/filebeat/filebeat.yml
+      owner: root
+      group: root
+      mode: "u=rw,g=,o="
+
+  - name: clear modules
+    file:
+      state: absent
+      path: /etc/filebeat/modules.d/
+  - name: modules upload
+    copy:
+      src: filebeat/modules.d/
+      dest: /etc/filebeat/modules.d/
+      owner: root
+      group: root
+      mode: "u=rw,g=,o="
+
+  - name: enable filebeat
+    service:
+      name: filebeat
+      enabled: yes
+      state: restarted
+ 

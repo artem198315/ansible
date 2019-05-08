@@ -1,0 +1,11 @@
+- module: mysql
+  # Error logs
+  error:
+    enabled: true
+    var.paths: ["/var/log/mysql/*error.log", "/var/log/mariadb/*error.log", "/var/log/mariadb/mariadb.log"]
+
+  # Slow logs
+  slowlog:
+    enabled: true
+    var.paths: ["/var/log/mysql/*-slow.log", "/var/log/mariadb/*-slow.log"]
+
