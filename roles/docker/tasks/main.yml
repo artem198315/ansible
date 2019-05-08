@@ -1,2 +1,77 @@
-- import_tasks: centos.yml
-  when: ansible_distribution | lower == 'centos'
+  - name: INFO MESSAGE FOR DOCKERHOST PLAYBOOK
+    debug:
+      msg: "USE --tags=install' for installing and reload, --tags=config for rollout configs without reload, --tags=reload for reload"
+  - name: create directory for ansible custom facts
+
+    file:
+      state: "directory"
+      recurse: yes
+      path: "/etc/ansible/facts.d"
+
+  - name: install custom impi fact
+    copy:
+      src: files/docker.fact
+      dest: /etc/ansible/facts.d
+      mode: 0755
+
+  - name: re-read facts after adding custom fact
+    setup: ~
+
+  - debug:
+      msg: "Docker: {{ ansible_local.docker }}"
+
+  - name: install docker and docker compose
+    block:
+      - name: install docker compose
+        get_url:
+          url:  https://github.com/docker/compose/releases/download/{{ compose_version }}/docker-compose-Linux-x86_64
+          dest: /usr/bin/docker-compose
+          mode: 0755
+
+      - name: install docker
+        import_tasks: install_docker.yml
+    tags: install
+
+  - name: configs
+    block:
+      - name: sysctl
+        sysctl: name=vm.max_map_count value=262144 state=present
+      - name: sysctl
+        sysctl: name=fs.file-max value=65500 state=present
+      - name: ulimit
+        shell: echo -e "*\tsoft\tnofile\t1000000\n*\thard\tnofile\t1000000\n" > /etc/security/limits.d/5-nofile.conf
+      - name: create directory for docker configs
+        file:
+          state: "directory"
+          recurse: yes
+          path: "/etc/docker"
+      - name: create directory for systemd overide
+        file:
+          state: directory
+          recurse: yes
+          path: "/etc/systemd/system/docker.service.d"
+      - name: template daemon.json upload
+        template:
+           src: docker/configs/daemon.json.tpl
+           dest: /etc/docker/daemon.json
+           owner: root
+           group: root
+           mode: "u=rw,g=,o="
+      - name: template systemd overide docker service
+        template:
+           src: docker/systemd/docker.conf
+           dest: /etc/systemd/system/docker.service.d/docker.conf
+           owner: root
+           group: root
+           mode: "u=rw,g=r,o=r"
+    tags:
+      - config
+      - install
+
+  - name: reloading service
+    debug: msg="Reloading"
+    changed_when: True
+    notify: reload_docker
+    tags:
+      - reload
+      - install

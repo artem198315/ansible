@@ -1,0 +1,11 @@
+---
+- name: install docker with yum
+  include_tasks: install_docker_yum.yml
+  when: ansible_distribution | lower == "centos"
+
+- name: install docker with apt
+  include_tasks: install_docker_apt.yml
+  with_items:
+    - debian
+    - ubuntu
+  when: ansible_distribution | lower == "{{ item }}"
